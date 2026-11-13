@@ -10,6 +10,7 @@ Un niveau est un fichier **texte UTF-8**, une instruction par ligne. Il se lit e
 format 1
 name "Trois marches"
 hue 268
+backdrop auto
 reinforcements default
 
 # joueurs : start <1|2> <x centre> <y pieds>
@@ -23,6 +24,9 @@ platform 300 300 200
 # ladder <x gauche> <haut> <bas>
 ladder 85 380 500
 ladder 385 300 500
+
+# laser <x centre> <haut> <bas>
+laser 760 36 500
 
 # ball <x> <y> <taille 1-4> <left|right>
 ball 200 150 4 right
@@ -50,6 +54,8 @@ le bas.
 | Sol (haut de la neige) | 500 |
 
 Épaisseur d'une plateforme : 14. Largeur d'une échelle : 30. Hauteur d'un joueur : 44.
+Murs latéraux : 8 unités de chaque côté (les boules rebondissent à x = 8 et x = 792 ;
+les départs, boules et échelles sont ramenés entre les murs).
 
 ## Instructions
 
@@ -57,20 +63,22 @@ le bas.
 |---|---|---|
 | `format 1` | **oui** | Version du format. Un fichier sans cette ligne est refusé. |
 | `name "texte"` | non | Nom affiché (47 octets max). Défaut : « Sans titre ». |
-| `hue <0-359>` | non | Teinte du ciel en degrés. Défaut : 215. |
+| `hue <0-359>` | non | Teinte du ciel en degrés (style moderne). Défaut : 215. |
+| `backdrop <v>` | non | Décor du style rétro : `auto` (un décor par tranche de 10 niveaux de campagne, le lac pour un niveau perso), `1` lac de montagne, `2` forêt au crépuscule, `3` nuit boréale. Défaut : `auto`. Ignoré par les versions qui ne le connaissent pas. |
 | `reinforcements <v>` | non | `default` (selon la difficulté), `off` (aucun) ou un intervalle de 3 à 600 secondes. |
 | `start <1\|2> <x> <y>` | non | Départ d'un joueur : `x` = centre, `y` = pieds (surface). Défaut : (336, 500) et (464, 500). |
 | `platform <x> <y> <w>` | non | Plateforme : coin haut-gauche et largeur. 32 max. |
 | `ladder <x> <haut> <bas>` | non | Échelle : bord gauche, y du sommet (là où on sort), y du bas. 32 max. |
+| `laser <x> <haut> <bas>` | non | Laser vertical : centre, y du haut et du bas (30 min). Les boules rebondissent dessus, les joueurs le traversent. 8 max. |
 | `ball <x> <y> <taille> <dir>` | en pratique | Boule : centre, taille 1 (petite) à 4 (géante), `left` ou `right`. 24 max. |
 
 ### Tailles des boules
 
 | Taille | Rayon | Hauteur de rebond | Points | Se divise en |
 |---|---|---|---|---|
-| 1 | 9 | 95 | 200 | — |
-| 2 | 15 | 165 | 150 | 2 × taille 1 |
-| 3 | 23 | 235 | 100 | 2 × taille 2 |
+| 1 | 9 | 300 | 200 | — |
+| 2 | 15 | 300 | 150 | 2 × taille 1 |
+| 3 | 23 | 300 | 100 | 2 × taille 2 |
 | 4 | 33 | 300 | 50 | 2 × taille 3 |
 
 ## Bornes appliquées au chargement (`level_clamp`)

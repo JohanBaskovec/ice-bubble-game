@@ -197,8 +197,29 @@ bool ui_hover(float x, float y, float w, float h)
 
 /* ------------------------------------------------------------------------ */
 
+/* Style retro (actif avec la police pixel) : rectangles biseautes */
+static bool retro_ui(void) { return font_pixel(); }
+
+static void bevel(float x, float y, float w, float h, Color face, Color light, Color dark, bool sunken)
+{
+    gfx_rect(x, y, w, h, face);
+    Color a = sunken ? dark : light, b = sunken ? light : dark;
+    gfx_rect(x, y, w, 3, a);
+    gfx_rect(x, y, 3, h, a);
+    gfx_rect(x, y + h - 3, w, 3, b);
+    gfx_rect(x + w - 3, y, 3, h, b);
+    gfx_rect(x - 2, y - 2, w + 4, 2, rgb(0x050814));
+    gfx_rect(x - 2, y + h, w + 4, 2, rgb(0x050814));
+    gfx_rect(x - 2, y, 2, h, rgb(0x050814));
+    gfx_rect(x + w, y, 2, h, rgb(0x050814));
+}
+
 void ui_panel(float x, float y, float w, float h)
 {
+    if (retro_ui()) {
+        bevel(x, y, w, h, rgba(0x101830, 0.92f), rgb(0x6A7CA8), rgb(0x1A2238), false);
+        return;
+    }
     gfx_rrect(x, y, w, h, 14, rgba(0x040A20, 0.82f));
     gfx_rrect_outline(x, y, w, h, 14, 2, rgba(0x8CCDFF, 0.35f));
 }
@@ -227,7 +248,9 @@ bool ui_button(const char *label, float x, float y, float w, float h, BtnStyle s
     if (size > 26) size = 26;
     Color text = rgb(0xDFF3FF);
 
-    switch (style) {
+    if (retro_ui()) {
+        if (style == BTN_BIG) size = h * 0.5f;
+    } else switch (style) {
     case BTN_BIG:
         size = h * 0.5f;
         gfx_rrect(x, y + 4, w, h, r, rgb(0x1F5C99));
@@ -249,6 +272,36 @@ bool ui_button(const char *label, float x, float y, float w, float h, BtnStyle s
         gfx_rrect(x, y + dy, w, h, r, rgba(0x78BEFF, hover ? 0.25f : 0.12f));
         gfx_rrect_outline(x, y + dy, w, h, r, 2, rgba(0x8CCDFF, 0.35f));
         break;
+    }
+    if (retro_ui()) {
+        /* repeint par-dessus : boutons biseautes facon annees 90 */
+        static const Uint32 FACES[][3] = {
+            { 0x3A4A78, 0x7F94C8, 0x1A2140 },    /* normal */
+            { 0x2FA8D8, 0xA8ECFF, 0x0F4F78 },    /* selectionne */
+            { 0xE8A020, 0xFFE08A, 0x7A4A08 },    /* grand */
+            { 0xA82848, 0xFF8AA0, 0x501020 },    /* danger */
+        };
+        int k = 0;
+        if (style == BTN_SELECTED || style == BTN_TOOL_ON) k = 1;
+        else if (style == BTN_BIG) k = 2;
+        else if (style == BTN_DANGER) k = 3;
+        Color face = rgb(FACES[k][0]);
+        if (hover && !held) face = color_lerp(face, rgb(0xFFFFFF), 0.15f);
+        bevel(x, y, w, h, face, rgb(FACES[k][1]), rgb(FACES[k][2]), held);
+        text = k == 0 || k == 3 ? rgb(0xFFFFFF) : rgb(0x101828);
+        if (focused) {
+            Color f = rgb(0xFFFFFF);
+            gfx_rect(x - 6, y - 6, w + 12, 2, f);
+            gfx_rect(x - 6, y + h + 4, w + 12, 2, f);
+            gfx_rect(x - 6, y - 6, 2, h + 12, f);
+            gfx_rect(x + w + 4, y - 6, 2, h + 12, f);
+        }
+        dy = held ? 2 : 0;
+        float tw = font_measure(label, size);
+        if (tw > w - 12 && tw > 0) size *= (w - 12) / tw;
+        font_draw(label, x + w / 2 + dy, y + h / 2 + dy, size, text, ALIGN_CENTER);
+        if (clicked) audio_play(SFX_CLICK, 0);
+        return clicked;
     }
     if (style == BTN_TOOL || style == BTN_TOOL_ON) size = h * 0.42f > 16 ? 16 : h * 0.42f;
     if (focused) gfx_rrect_outline(x - 4, y - 4 + dy, w + 8, h + 8, r + 4, 2.5f, rgb(0xFFFFFF));
@@ -281,8 +334,12 @@ bool ui_textfield(char *buf, size_t cap, float x, float y, float w, float h, con
             focused = false;
         }
     }
-    gfx_rrect(x, y, w, h, 10, rgba(0x000000, 0.35f));
-    gfx_rrect_outline(x, y, w, h, 10, 2, focused ? rgb(0x9FE0FF) : rgba(0x8CCDFF, 0.35f));
+    if (retro_ui()) {
+        bevel(x, y, w, h, rgba(0x000000, 0.55f), rgb(0x1A2238), focused ? rgb(0x9FE0FF) : rgb(0x6A7CA8), false);
+    } else {
+        gfx_rrect(x, y, w, h, 10, rgba(0x000000, 0.35f));
+        gfx_rrect_outline(x, y, w, h, 10, 2, focused ? rgb(0x9FE0FF) : rgba(0x8CCDFF, 0.35f));
+    }
     float size = h * 0.5f;
     if (size > 20) size = 20;
     if (buf[0]) {

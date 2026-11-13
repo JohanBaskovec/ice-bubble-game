@@ -20,6 +20,13 @@ void font_draw(const char *text, float x, float y, float size, Color c, TextAlig
 /* Variante avec contour sombre pour la lisibilite sur le decor. */
 void font_draw_outlined(const char *text, float x, float y, float size, Color c, TextAlign align);
 
+/* Police pixel (style retro) : police bitmap 8x8 du domaine public, agrandie
+ * sans lissage. target = true pendant le dessin dans la cible basse resolution
+ * du style retro (taille des pixels arrondie a un nombre pair d'unites). */
+void font_set_pixel(bool on);
+bool font_pixel(void);
+void font_set_pixel_target(bool on);
+
 /* Decode un caractere UTF-8 ; avance *s. Retourne 0 en fin de chaine. */
 Uint32 utf8_next(const char **s);
 

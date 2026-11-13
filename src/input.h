@@ -18,6 +18,9 @@ void input_quit(void);
 void input_handle_event(const SDL_Event *e);   /* evenement deja converti en coords logiques */
 void input_clear(void);
 
+/* Maintient une touche enfoncee (commandes hold/release des scripts de test). */
+void input_force_key(SDL_Scancode sc, bool down);
+
 PlayerInput input_player(int index, int player_count);
 
 bool input_touch_visible(void);

@@ -15,9 +15,11 @@
 #define LEVEL_MAX_PLATFORMS 32
 #define LEVEL_MAX_LADDERS   32
 #define LEVEL_MAX_BALLS     24
+#define LEVEL_MAX_LASERS    8
 #define LEVEL_NAME_MAX      48
 
 #define BALL_SIZES 4        /* tailles internes 0..3 (fichier : 1..4) */
+#define BACKDROP_COUNT 3    /* decors du style retro (1..3) ; 0 = automatique */
 
 /* Renforts : boules qui tombent du plafond a intervalle regulier. */
 #define REINFORCE_DEFAULT 0.0f   /* intervalle selon la difficulte */
@@ -32,6 +34,13 @@ typedef struct LevelLadder {
     float top, bottom;      /* y du haut (sommet praticable) et du bas */
 } LevelLadder;
 
+/* Laser : barriere verticale. Les boules rebondissent dessus, les joueurs
+ * (et leurs tirs) la traversent. */
+typedef struct LevelLaser {
+    float x;                /* centre ; epaisseur de collision = LASER_W */
+    float top, bottom;
+} LevelLaser;
+
 typedef struct LevelBall {
     float x, y;             /* centre */
     int size;               /* 0 = petite .. 3 = geante */
@@ -45,7 +54,8 @@ typedef struct LevelStart {
 
 typedef struct Level {
     char name[LEVEL_NAME_MAX];
-    int hue;                        /* teinte du decor, 0..359 */
+    int hue;                        /* teinte du decor (style moderne), 0..359 */
+    int backdrop;                   /* decor du style retro : 0 = auto, 1..BACKDROP_COUNT */
     float reinforce;                /* REINFORCE_DEFAULT, REINFORCE_OFF ou secondes */
     LevelStart start[2];
 
@@ -55,6 +65,8 @@ typedef struct Level {
     LevelLadder ladders[LEVEL_MAX_LADDERS];
     int ball_count;
     LevelBall balls[LEVEL_MAX_BALLS];
+    int laser_count;
+    LevelLaser lasers[LEVEL_MAX_LASERS];
 } Level;
 
 /* Niveau vide avec valeurs par defaut. */

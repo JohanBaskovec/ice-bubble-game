@@ -9,6 +9,8 @@
 #define FLOOR_Y  500    /* haut du sol enneige */
 #define PLAT_H   14     /* epaisseur des plateformes */
 #define LADDER_W 30     /* largeur des echelles */
+#define LASER_W 6           /* epaisseur de collision d'un laser */
+#define WALL_W   8      /* murs lateraux : les boules et joueurs rebondissent dessus */
 
 #define APP_TITLE "Boules de Givre"
 #define APP_ORG   "johanbaskovec"

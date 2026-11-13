@@ -35,12 +35,14 @@ typedef enum Tool {
     TOOL_BALL,
     TOOL_START1,
     TOOL_START2,
+    TOOL_LASER,
     TOOL_ERASE,
     TOOL_COUNT
 } Tool;
 
 static const char *const TOOL_NAMES[TOOL_COUNT] = { "Sélection (V)", "Plateforme (P)", "Échelle (L)", "Boule (B)",
-                                                    "Départ J1 (1)", "Départ J2 (2)", "Gomme (E)" };
+                                                    "Départ J1 (1)", "Départ J2 (2)", "Laser (R)",
+                                                    "Gomme (E)" };
 static const char *const TOOL_HINTS[TOOL_COUNT] = {
     "Clic : sélectionner · glisser : déplacer · poignées : redimensionner · Suppr : effacer",
     "Glisser horizontalement pour tracer une plateforme (clic simple : largeur 120)",
@@ -48,10 +50,11 @@ static const char *const TOOL_HINTS[TOOL_COUNT] = {
     "Clic : poser une boule (taille et direction dans le panneau)",
     "Clic : position de départ du joueur 1 (posé sur la surface en dessous)",
     "Clic : position de départ du joueur 2 (posé sur la surface en dessous)",
+    "Clic : laser vertical (les boules rebondissent dessus, les joueurs le traversent)",
     "Clic : effacer l'objet sous le curseur (clic droit : partout)",
 };
 
-typedef enum ObjKind { OBJ_NONE, OBJ_PLATFORM, OBJ_LADDER, OBJ_BALL, OBJ_START } ObjKind;
+typedef enum ObjKind { OBJ_NONE, OBJ_PLATFORM, OBJ_LADDER, OBJ_BALL, OBJ_START, OBJ_LASER } ObjKind;
 typedef struct ObjRef { ObjKind kind; int index; } ObjRef;
 
 typedef enum Drag {
@@ -61,6 +64,8 @@ typedef enum Drag {
     DRAG_RESIZE_R,
     DRAG_LADDER_TOP,
     DRAG_LADDER_BOTTOM,
+    DRAG_LASER_TOP,
+    DRAG_LASER_BOTTOM,
     DRAG_NEW_PLATFORM,
 } Drag;
 
@@ -333,6 +338,10 @@ static ObjRef hit_test(float x, float y)
         const LevelStart *s = &E.lvl.start[i];
         if (x > s->x - 16 && x < s->x + 16 && y > s->y - 48 && y < s->y + 2) return (ObjRef){ OBJ_START, i };
     }
+    for (int i = E.lvl.laser_count - 1; i >= 0; i--) {
+        const LevelLaser *z = &E.lvl.lasers[i];
+        if (fabsf(x - z->x) <= 9 && y >= z->top - 2 && y <= z->bottom + 2) return (ObjRef){ OBJ_LASER, i };
+    }
     for (int i = E.lvl.ladder_count - 1; i >= 0; i--) {
         const LevelLadder *l = &E.lvl.ladders[i];
         if (x >= l->x && x <= l->x + LADDER_W && y >= l->top - 8 && y <= l->bottom) return (ObjRef){ OBJ_LADDER, i };
@@ -359,6 +368,12 @@ static void delete_obj(ObjRef o)
         memmove(&E.lvl.ladders[o.index], &E.lvl.ladders[o.index + 1],
                 sizeof(LevelLadder) * (size_t)(E.lvl.ladder_count - o.index - 1));
         E.lvl.ladder_count--;
+        break;
+    case OBJ_LASER:
+        checkpoint();
+        memmove(&E.lvl.lasers[o.index], &E.lvl.lasers[o.index + 1],
+                sizeof(LevelLaser) * (size_t)(E.lvl.laser_count - o.index - 1));
+        E.lvl.laser_count--;
         break;
     case OBJ_BALL:
         checkpoint();
@@ -387,6 +402,12 @@ static void duplicate_sel(void)
         l.x += 40;
         E.lvl.ladders[E.lvl.ladder_count] = l;
         E.sel.index = E.lvl.ladder_count++;
+    } else if (s.kind == OBJ_LASER && E.lvl.laser_count < LEVEL_MAX_LASERS) {
+        checkpoint();
+        LevelLaser z = E.lvl.lasers[s.index];
+        z.x += 40;
+        E.lvl.lasers[E.lvl.laser_count] = z;
+        E.sel.index = E.lvl.laser_count++;
     } else if (s.kind == OBJ_BALL && E.lvl.ball_count < LEVEL_MAX_BALLS) {
         checkpoint();
         LevelBall b = E.lvl.balls[s.index];
@@ -412,6 +433,11 @@ static void nudge(float dx, float dy)
         E.lvl.ladders[s.index].x += dx;
         E.lvl.ladders[s.index].top += dy;
         E.lvl.ladders[s.index].bottom += dy;
+        break;
+    case OBJ_LASER:
+        E.lvl.lasers[s.index].x += dx;
+        E.lvl.lasers[s.index].top += dy;
+        E.lvl.lasers[s.index].bottom += dy;
         break;
     case OBJ_BALL: E.lvl.balls[s.index].x += dx; E.lvl.balls[s.index].y += dy; break;
     case OBJ_START: E.lvl.start[s.index].x += dx; E.lvl.start[s.index].y += dy; break;
@@ -453,6 +479,31 @@ static void place_ladder(float x, float y)
     level_clamp(&E.lvl);
 }
 
+/* Laser vertical : du dessous de l'obstacle au-dessus (plafond ou plateforme)
+ * jusqu'a la surface en dessous. */
+static void place_laser(float x, float y)
+{
+    if (E.lvl.laser_count >= LEVEL_MAX_LASERS) {
+        status(true, "Trop de lasers (max %d)", LEVEL_MAX_LASERS);
+        return;
+    }
+    float top = CEIL_Y;
+    for (int i = 0; i < E.lvl.platform_count; i++) {
+        const LevelPlatform *p = &E.lvl.platforms[i];
+        if (x >= p->x && x <= p->x + p->w && p->y + PLAT_H <= y && p->y + PLAT_H > top) top = p->y + PLAT_H;
+    }
+    float bottom = level_surface_below(&E.lvl, x, y);
+    if (bottom - top < 30) {
+        status(true, "Pas assez de place pour un laser ici");
+        return;
+    }
+    checkpoint();
+    LevelLaser z = { snapv(x), top, bottom };
+    E.lvl.lasers[E.lvl.laser_count] = z;
+    E.sel = (ObjRef){ OBJ_LASER, E.lvl.laser_count++ };
+    level_clamp(&E.lvl);
+}
+
 static void place_ball(float x, float y)
 {
     if (E.lvl.ball_count >= LEVEL_MAX_BALLS) {
@@ -481,6 +532,12 @@ static Drag handle_at(float x, float y)
             if (fabsf(y - l->top) < 7) return DRAG_LADDER_TOP;
             if (fabsf(y - l->bottom) < 7) return DRAG_LADDER_BOTTOM;
         }
+    } else if (E.sel.kind == OBJ_LASER) {
+        const LevelLaser *z = &E.lvl.lasers[E.sel.index];
+        if (fabsf(x - z->x) <= 10) {
+            if (fabsf(y - z->top - 4) < 7) return DRAG_LASER_TOP;
+            if (fabsf(y - z->bottom + 4) < 7) return DRAG_LASER_BOTTOM;
+        }
     }
     return DRAG_NONE;
 }
@@ -496,6 +553,11 @@ static void begin_move(ObjRef o, float x, float y)
         E.grab_dx = x - E.lvl.ladders[o.index].x;
         E.grab_dy = y - E.lvl.ladders[o.index].top;
         E.keep = E.lvl.ladders[o.index].bottom - E.lvl.ladders[o.index].top;
+        break;
+    case OBJ_LASER:
+        E.grab_dx = x - E.lvl.lasers[o.index].x;
+        E.grab_dy = y - E.lvl.lasers[o.index].top;
+        E.keep = E.lvl.lasers[o.index].bottom - E.lvl.lasers[o.index].top;
         break;
     case OBJ_BALL: E.grab_dx = x - E.lvl.balls[o.index].x; E.grab_dy = y - E.lvl.balls[o.index].y; break;
     case OBJ_START: E.grab_dx = x - E.lvl.start[o.index].x; E.grab_dy = 0; break;
@@ -537,6 +599,7 @@ static void field_press(float x, float y)
         E.anchor_y = snapv(y);
         break;
     case TOOL_LADDER: place_ladder(x, y); break;
+    case TOOL_LASER: place_laser(x, y); break;
     case TOOL_START1:
     case TOOL_START2:
         checkpoint();
@@ -572,6 +635,15 @@ static void field_drag(float x, float y)
             if (l->bottom > FLOOR_Y) { l->bottom = FLOOR_Y; l->top = FLOOR_Y - E.keep; }
             break;
         }
+        case OBJ_LASER: {
+            LevelLaser *z = &E.lvl.lasers[s.index];
+            z->x = snapv(x - E.grab_dx);
+            z->top = snapv(y - E.grab_dy);
+            z->bottom = z->top + E.keep;
+            if (z->bottom > FLOOR_Y) { z->bottom = FLOOR_Y; z->top = FLOOR_Y - E.keep; }
+            if (z->top < CEIL_Y) { z->top = CEIL_Y; z->bottom = CEIL_Y + E.keep; }
+            break;
+        }
         case OBJ_BALL:
             E.lvl.balls[s.index].x = snapv(x - E.grab_dx);
             E.lvl.balls[s.index].y = snapv(y - E.grab_dy);
@@ -596,6 +668,8 @@ static void field_drag(float x, float y)
     }
     case DRAG_LADDER_TOP: E.lvl.ladders[s.index].top = snapv(y); break;
     case DRAG_LADDER_BOTTOM: E.lvl.ladders[s.index].bottom = snapv(y); break;
+    case DRAG_LASER_TOP: E.lvl.lasers[s.index].top = snapv(y); break;
+    case DRAG_LASER_BOTTOM: E.lvl.lasers[s.index].bottom = snapv(y); break;
     default: break;
     }
     level_clamp(&E.lvl);
@@ -644,7 +718,7 @@ static void shortcuts(void)
         if (ui_key_pressed(SDLK_D)) duplicate_sel();
         return;
     }
-    static const SDL_Keycode tool_keys[TOOL_COUNT] = { SDLK_V, SDLK_P, SDLK_L, SDLK_B, SDLK_1, SDLK_2, SDLK_E };
+    static const SDL_Keycode tool_keys[TOOL_COUNT] = { SDLK_V, SDLK_P, SDLK_L, SDLK_B, SDLK_1, SDLK_2, SDLK_R, SDLK_E };
     for (int i = 0; i < TOOL_COUNT; i++)
         if (ui_key_pressed(tool_keys[i])) E.tool = (Tool)i;
     if (ui_key_pressed(SDLK_G)) E.grid = !E.grid;
@@ -691,6 +765,13 @@ static void draw_selection(void)
         gfx_rect(p->x + p->w - 4, p->y + PLAT_H / 2.0f - 6, 8, 12, hi);
         break;
     }
+    case OBJ_LASER: {
+        const LevelLaser *z = &E.lvl.lasers[s.index];
+        gfx_rrect_outline(z->x - 11, z->top - 3, 22, z->bottom - z->top + 6, 4, 2, hi);
+        gfx_rect(z->x - 6, z->top, 12, 8, hi);
+        gfx_rect(z->x - 6, z->bottom - 8, 12, 8, hi);
+        break;
+    }
     case OBJ_LADDER: {
         const LevelLadder *l = &E.lvl.ladders[s.index];
         gfx_rrect_outline(l->x - 3, l->top - 9, LADDER_W + 6, l->bottom - l->top + 12, 4, 2, hi);
@@ -718,6 +799,7 @@ static void draw_field(void)
         backdrop_build(&E.bg, E.lvl.hue, 1234);
         E.bg_hue = E.lvl.hue;
     }
+    E.bg.world = game_world_for(&E.lvl, 0);
     gfx_set_offset(FX, FY);
     SDL_FRect clip = { 0, 0, GAME_W, GAME_H };
     gfx_clip(&clip);
@@ -730,7 +812,7 @@ static void draw_field(void)
             gfx_rect(0, (float)y, GAME_W, 1, rgba(0xFFFFFF, y % 100 == 0 ? 0.12f : 0.05f));
     }
     /* zones non jouables */
-    gfx_rect(0, 0, GAME_W, CEIL_Y, rgba(0x040A1E, 0.78f));
+    gfx_rect(0, 0, GAME_W, CEIL_Y, rgba(0x040A1E, g_settings.retro ? 0.35f : 0.78f));
     font_draw("bandeau du score (hors jeu)", GAME_W / 2.0f, CEIL_Y / 2.0f, 12, rgba(0xEAF6FF, 0.35f), ALIGN_CENTER);
     gfx_rect(0, FLOOR_Y, GAME_W, 1, rgba(0xFFFFFF, 0.4f));
 
@@ -738,6 +820,8 @@ static void draw_field(void)
         draw_ladder(E.lvl.ladders[i].x, E.lvl.ladders[i].top, E.lvl.ladders[i].bottom);
     for (int i = 0; i < E.lvl.platform_count; i++)
         draw_platform(E.lvl.platforms[i].x, E.lvl.platforms[i].y, E.lvl.platforms[i].w);
+    for (int i = 0; i < E.lvl.laser_count; i++)
+        draw_laser(E.lvl.lasers[i].x, E.lvl.lasers[i].top, E.lvl.lasers[i].bottom, E.t);
     if (E.paths) draw_paths();
     for (int i = 0; i < E.lvl.ball_count; i++) {
         const LevelBall *b = &E.lvl.balls[i];
@@ -864,6 +948,12 @@ static void selection_info(float y)
         SDL_snprintf(buf, sizeof buf, "x %d   haut %d   bas %d", (int)l->x, (int)l->top, (int)l->bottom);
         break;
     }
+    case OBJ_LASER: {
+        const LevelLaser *z = &E.lvl.lasers[s.index];
+        header("Laser", y);
+        SDL_snprintf(buf, sizeof buf, "x %d   haut %d   bas %d", (int)z->x, (int)z->top, (int)z->bottom);
+        break;
+    }
     case OBJ_START: {
         const LevelStart *st = &E.lvl.start[s.index];
         header(s.index ? "Départ joueur 2" : "Départ joueur 1", y);
@@ -893,12 +983,28 @@ static void level_props(float y)
     ui_textfield(E.lvl.name, sizeof E.lvl.name, PANEL_X, y, PANEL_W, 32, "Nom du niveau");
     y += 40;
 
-    font_draw("Teinte", PANEL_X, y + 15, 13, rgba(0xEAF6FF, 0.8f), ALIGN_LEFT);
-    if (ui_button("−", PANEL_X + 80, y, 34, 30, BTN_TOOL)) { checkpoint(); E.lvl.hue = (E.lvl.hue + 345) % 360; }
-    gfx_rrect(PANEL_X + 120, y + 3, 92, 24, 6, hsl((float)E.lvl.hue + 15, 0.48f, 0.3f, 1.0f));
-    SDL_snprintf(buf, sizeof buf, "%d°", E.lvl.hue);
-    font_draw(buf, PANEL_X + 166, y + 15, 13, rgb(0xFFFFFF), ALIGN_CENTER);
-    if (ui_button("+", PANEL_X + 218, y, 34, 30, BTN_TOOL)) { checkpoint(); E.lvl.hue = (E.lvl.hue + 15) % 360; }
+    if (g_settings.retro) {
+        /* style retro : choix du decor (la teinte ne sert qu'au style moderne) */
+        static const char *const NAMES[BACKDROP_COUNT + 1] = { "Auto", "Lac", "Crépuscule", "Nuit" };
+        font_draw("Décor", PANEL_X, y + 15, 13, rgba(0xEAF6FF, 0.8f), ALIGN_LEFT);
+        if (ui_button("−", PANEL_X + 80, y, 34, 30, BTN_TOOL)) {
+            checkpoint();
+            E.lvl.backdrop = (E.lvl.backdrop + BACKDROP_COUNT) % (BACKDROP_COUNT + 1);
+        }
+        font_draw(NAMES[E.lvl.backdrop % (BACKDROP_COUNT + 1)], PANEL_X + 166, y + 15, 13, rgb(0xFFFFFF),
+                  ALIGN_CENTER);
+        if (ui_button("+", PANEL_X + 218, y, 34, 30, BTN_TOOL)) {
+            checkpoint();
+            E.lvl.backdrop = (E.lvl.backdrop + 1) % (BACKDROP_COUNT + 1);
+        }
+    } else {
+        font_draw("Teinte", PANEL_X, y + 15, 13, rgba(0xEAF6FF, 0.8f), ALIGN_LEFT);
+        if (ui_button("−", PANEL_X + 80, y, 34, 30, BTN_TOOL)) { checkpoint(); E.lvl.hue = (E.lvl.hue + 345) % 360; }
+        gfx_rrect(PANEL_X + 120, y + 3, 92, 24, 6, hsl((float)E.lvl.hue + 15, 0.48f, 0.3f, 1.0f));
+        SDL_snprintf(buf, sizeof buf, "%d°", E.lvl.hue);
+        font_draw(buf, PANEL_X + 166, y + 15, 13, rgb(0xFFFFFF), ALIGN_CENTER);
+        if (ui_button("+", PANEL_X + 218, y, 34, 30, BTN_TOOL)) { checkpoint(); E.lvl.hue = (E.lvl.hue + 15) % 360; }
+    }
     y += 36;
 
     font_draw("Renforts", PANEL_X, y + 15, 13, rgba(0xEAF6FF, 0.8f), ALIGN_LEFT);
@@ -967,9 +1073,9 @@ static void status_bar(float dt)
         font_draw(TOOL_HINTS[E.tool], FX + 10, y + 15, 13, rgba(0xEAF6FF, 0.7f), ALIGN_LEFT);
     }
     const char *src = E.src == LEVELSRC_CAMPAIGN ? "campagne" : "perso";
-    SDL_snprintf(buf, sizeof buf, "%s%s%s · boules %d/%d · plateformes %d · échelles %d", E.dirty ? "* " : "",
-                 E.has_file ? E.file : "(non enregistré)", E.has_file ? "" : "", E.lvl.ball_count, LEVEL_MAX_BALLS,
-                 E.lvl.platform_count, E.lvl.ladder_count);
+    SDL_snprintf(buf, sizeof buf, "%s%s%s · boules %d/%d · plateformes %d · échelles %d · lasers %d",
+                 E.dirty ? "* " : "", E.has_file ? E.file : "(non enregistré)", E.has_file ? "" : "", E.lvl.ball_count,
+                 LEVEL_MAX_BALLS, E.lvl.platform_count, E.lvl.ladder_count, E.lvl.laser_count);
     (void)src;
     float right = ED_W - FX - 10;
     if (in_field()) {

@@ -2,12 +2,18 @@
 #include "font.h"
 #include "game.h"
 #include "gfx.h"
+#include "retro.h"
 #include "settings.h"
 
 #include <math.h>
 #include <stdio.h>
 
 #define PI_F 3.14159265f
+
+/* Decor retro courant (fixe par draw_backdrop, utilise par les plateformes) */
+static int g_world = 1;
+
+static bool retro(void) { return g_settings.retro; }
 
 /* ------------------------------------------------------------------------ */
 /* Decor                                                                    */
@@ -53,6 +59,11 @@ void backdrop_build(Backdrop *bg, int hue, int seed)
 
 void draw_backdrop(const Backdrop *bg, double t)
 {
+    g_world = bg->world < 1 ? 1 : bg->world;
+    if (retro()) {
+        retro_draw_backdrop(g_world);
+        return;
+    }
     float h = (float)bg->hue;
     Color c0 = hsl(h, 0.55f, 0.09f, 1.0f), c1 = hsl(h + 15, 0.48f, 0.20f, 1.0f), c2 = hsl(h + 30, 0.42f, 0.34f, 1.0f);
     gfx_rect_vgrad(0, 0, GAME_W, FLOOR_Y * 0.6f, c0, c1);
@@ -105,10 +116,16 @@ void draw_backdrop(const Backdrop *bg, double t)
     /* sol enneige */
     gfx_rect_vgrad(0, FLOOR_Y + 2, GAME_W, GAME_H - FLOOR_Y - 2, rgb(0xF4FBFF), rgb(0x8FC0E4));
     for (int x = 0; x <= GAME_W; x += 20) gfx_ellipse(x + 10.0f, FLOOR_Y + 3, 11, 4, rgb(0xF4FBFF));
+
+    /* murs lateraux en glace */
+    gfx_rect_hgrad(0, CEIL_Y, WALL_W, FLOOR_Y - CEIL_Y + 2, rgba(0xBFE9FF, 0.75f), rgba(0x5FA8DC, 0.55f));
+    gfx_rect_hgrad(GAME_W - WALL_W, CEIL_Y, WALL_W, FLOOR_Y - CEIL_Y + 2, rgba(0x5FA8DC, 0.55f),
+                   rgba(0xBFE9FF, 0.75f));
 }
 
 void draw_flakes(const Game *g)
 {
+    if (retro() && g_world == 1) return;   /* pas de neige sur le lac en ete */
     for (int i = 0; i < MAX_FLAKES; i++) {
         const Flake *f = &g->flakes[i];
         gfx_circle(f->x, f->y, f->r, rgba(0xFFFFFF, 0.75f));
@@ -120,6 +137,10 @@ void draw_flakes(const Game *g)
 
 void draw_platform(float x, float y, float w)
 {
+    if (retro()) {
+        retro_draw_platform(g_world, x, y, w);
+        return;
+    }
     gfx_rrect_vgrad(x, y, w, PLAT_H, 4, rgb(0xD8F3FF), rgb(0x4F9BD0));
     gfx_rrect_outline(x, y, w, PLAT_H, 4, 1, rgba(0x143C6E, 0.5f));
     /* neige sur le dessus */
@@ -138,6 +159,10 @@ void draw_platform(float x, float y, float w)
 
 void draw_ladder(float x, float top, float bottom)
 {
+    if (retro()) {
+        retro_draw_ladder(x, top, bottom);
+        return;
+    }
     float w = LADDER_W;
     for (int pass = 0; pass < 2; pass++) {
         Color c = pass ? rgb(0xA9DCF5) : rgb(0x2B4F73);
@@ -151,11 +176,39 @@ void draw_ladder(float x, float top, float bottom)
     }
 }
 
+void draw_laser(float x, float top, float bottom, double t)
+{
+    /* rayon vert qui scintille entre deux emetteurs metalliques */
+    float flick = 0.75f + 0.25f * sinf((float)t * 31.0f) * sinf((float)t * 7.0f + x);
+    float y0 = top + 6, h = bottom - top - 12;
+    if (h > 0) {
+        gfx_rect(x - 5, y0, 10, h, rgba(0x30FF60, 0.16f * flick));
+        gfx_rect(x - 3, y0, 6, h, rgba(0x50FF70, 0.45f * flick));
+        gfx_rect(x - 1, y0, 2, h, rgba(0xE8FFE8, flick));
+        /* etincelles qui montent le long du rayon */
+        for (int i = 0; i < 4; i++) {
+            float p = fmodf((float)t * 90.0f + i * h / 4, h);
+            gfx_rect(x - 2, y0 + h - p, 4, 4, rgba(0xC8FFC8, 0.8f * flick));
+        }
+    }
+    for (int k = 0; k < 2; k++) {
+        float ey = k ? bottom - 8 : top;
+        gfx_rect(x - 8, ey, 16, 8, rgb(0x56606E));
+        gfx_rect(x - 8, ey, 16, 2, rgb(0xA8B4C4));
+        gfx_rect(x - 8, ey + 6, 16, 2, rgb(0x2A3038));
+        gfx_rect(x - 3, k ? ey - 1 : ey + 6, 6, 3, rgba(0x80FF90, flick));
+    }
+}
+
 static const Uint32 BALL_COLORS[4][2] = {
     { 0xFF7B98, 0xA50D36 }, { 0xFFD56B, 0xB86E00 }, { 0x86F5B2, 0x0F7D42 }, { 0x86CCFF, 0x1A55AA } };
 
 void draw_ball(float x, float y, int size, bool frozen)
 {
+    if (retro()) {
+        retro_draw_ball(x, y, size, frozen);
+        return;
+    }
     float r = BALL_R[size];
     Color gold = rgb(0xD9B24A);
     /* attache de boule de Noel */
@@ -187,6 +240,15 @@ static const Palette PALETTES[2] = { { 0x2C6BE0, 0x86B8FF, 0xFF8A2A, 0x9BE8FF },
 static void draw_snowman(float cx, float top, int index, int f, bool climb, float walk_t, bool shield,
                          double t, float bob)
 {
+    if (retro()) {
+        int frame = climb ? (sinf(walk_t * 10) > 0 ? 1 : 2) : 0;
+        retro_draw_player(cx, top + roundf(bob / 2) * 2, index, frame, f);
+        if (shield) {
+            float a = 0.55f + sinf((float)t * 6.7f) * 0.2f;
+            gfx_ring(cx, top + 22, 29, 2, rgba(0x96E6FF, a));
+        }
+        return;
+    }
     const Palette *pal = &PALETTES[index & 1];
     float ox, oy;
     gfx_get_offset(&ox, &oy);
@@ -255,6 +317,8 @@ static void draw_player(const Game *g, const Player *p)
 
 static void draw_beam(const Beam *bm)
 {
+    /* clignote juste avant de disparaitre */
+    if (bm->hold > 0 && bm->hold < 0.6f && bm->top <= bm->stop && ((int)(bm->hold * 12)) % 2) return;
     float h = bm->base - bm->top - 8;
     if (h > 0) {
         gfx_rect_hgrad(bm->x - 4, bm->top + 8, 4, h, rgba(0x78D2FF, 0.7f), rgb(0xFFFFFF));
@@ -267,6 +331,11 @@ static void draw_beam(const Beam *bm)
     }
     gfx_tri(bm->x - 6, bm->top + 10, bm->x, bm->top, bm->x + 6, bm->top + 10, rgb(0xFFFFFF));
     gfx_circle(bm->x, bm->top + 4, 2, rgba(0xFFFFFF, 0.9f));
+    if (bm->hold > 0 && bm->top <= bm->stop) {
+        /* colonne accrochee : bloc de glace au sommet */
+        gfx_rect(bm->x - 8, bm->top, 16, 8, rgb(0xE6F8FF));
+        gfx_rect(bm->x - 8, bm->top + 6, 16, 2, rgb(0x7CC8F0));
+    }
 }
 
 static void pup_icon(PupKind k, float cx, float cy, float s)
@@ -278,15 +347,35 @@ static void pup_icon(PupKind k, float cx, float cy, float s)
     case PUP_FREEZE: gfx_snowflake(cx, cy, s * 0.32f, 1.6f, ink); break;
     case PUP_SHIELD: gfx_shield_icon(cx, cy, s * 0.55f, ink); break;
     case PUP_LIFE: gfx_heart(cx, cy, s * 0.6f, rgb(0xC0103A)); break;
+    case PUP_STICK:
+        /* gros batonnet de glace */
+        gfx_rect(cx - s * 0.05f, cy + s * 0.12f, s * 0.1f, s * 0.3f, rgb(0x8A5A2B));
+        gfx_rrect(cx - s * 0.2f, cy - s * 0.38f, s * 0.4f, s * 0.54f, s * 0.12f, ink);
+        gfx_rrect(cx - s * 0.14f, cy - s * 0.32f, s * 0.28f, s * 0.42f, s * 0.08f, rgb(0xFFFFFF));
+        break;
     default: break;
     }
 }
 
-static const Uint32 PUP_COLORS[PUP_KINDS] = { 0xFFB347, 0x7CD0FF, 0xB9F3FF, 0x9B8CFF, 0xFF6B8B };
+static const Uint32 PUP_COLORS[PUP_KINDS] = { 0xFFB347, 0x7CD0FF, 0xB9F3FF, 0x9B8CFF, 0xFF6B8B, 0x8CF0C8, 0xFFF7A8 };
 
 static void draw_pup(const Pup *u)
 {
-    if (u->life < 2 && ((int)(u->life * 10)) % 2) return;
+    if (u->kind == PUP_FRUIT) {
+        if (!retro()) gfx_circle(u->x + 11, u->y + 11, 15, rgba(0xFFFFFF, 0.25f));
+        retro_draw_fruit(u->fruit, u->x - 1, u->y - 2);
+        return;
+    }
+    if (retro()) {
+        /* caisse biseautee */
+        gfx_rect(u->x, u->y, 22, 22, rgb(PUP_COLORS[u->kind]));
+        gfx_rect(u->x, u->y, 22, 2, rgb(0xFFFFFF));
+        gfx_rect(u->x, u->y, 2, 22, rgb(0xFFFFFF));
+        gfx_rect(u->x, u->y + 20, 22, 2, rgb(0x203050));
+        gfx_rect(u->x + 20, u->y, 2, 22, rgb(0x203050));
+        pup_icon(u->kind, u->x + 11, u->y + 11, 22);
+        return;
+    }
     gfx_rrect(u->x, u->y, 22, 22, 6, rgb(PUP_COLORS[u->kind]));
     gfx_rrect_outline(u->x, u->y, 22, 22, 6, 2, rgb(0xFFFFFF));
     pup_icon(u->kind, u->x + 11, u->y + 11, 22);
@@ -297,11 +386,24 @@ static void draw_pup(const Pup *u)
 
 typedef struct HudIcon { PupKind k; float f; } HudIcon;
 
+static void draw_popups(const Game *g)
+{
+    char buf[16];
+    for (int i = 0; i < g->popup_n; i++) {
+        const Popup *q = &g->popups[i];
+        float a = q->life > 0.4f ? 1 : q->life / 0.4f;
+        SDL_snprintf(buf, sizeof buf, "%d", q->value);
+        font_draw_outlined(buf, q->x, q->y, 16, rgba(0xFFE860, a), ALIGN_CENTER);
+    }
+}
+
 static void draw_hud(const Game *g)
 {
     char buf[96];
-    gfx_rect(0, 0, GAME_W, CEIL_Y, rgba(0x040A1E, 0.78f));
-    gfx_rect(0, CEIL_Y - 1, GAME_W, 1, rgba(0x96D2FF, 0.35f));
+    if (!retro()) {
+        gfx_rect(0, 0, GAME_W, CEIL_Y, rgba(0x040A1E, 0.78f));
+        gfx_rect(0, CEIL_Y - 1, GAME_W, 1, rgba(0x96D2FF, 0.35f));
+    }
 
     for (int i = 0; i < g->players_n; i++) {
         const Player *p = &g->players[i];
@@ -317,10 +419,11 @@ static void draw_hud(const Game *g)
         if (p->lives > 6) font_draw("+", hx + (right ? -6 : 6) * 15.0f, 18, 14, rgb(0xFF6B8B), ALIGN_CENTER);
         float ix = hx + (right ? -1 : 1) * (hearts * 15.0f + 6);
 
-        HudIcon icons[3];
+        HudIcon icons[4];
         int n = 0;
-        if (p->rapid > 0) icons[n++] = (HudIcon){ PUP_RAPID, p->rapid / 8 };
-        if (p->dbl > 0) icons[n++] = (HudIcon){ PUP_DOUBLE, p->dbl / 12 };
+        if (p->rapid) icons[n++] = (HudIcon){ PUP_RAPID, 1 };
+        if (p->dbl) icons[n++] = (HudIcon){ PUP_DOUBLE, 1 };
+        if (p->stick) icons[n++] = (HudIcon){ PUP_STICK, 1 };
         if (p->shield) icons[n++] = (HudIcon){ PUP_SHIELD, 1 };
         for (int k = 0; k < n; k++) {
             float bx = right ? ix - 18 : ix;
@@ -339,8 +442,12 @@ static void draw_hud(const Game *g)
 
     if (g->mode == GAMEMODE_CAMPAIGN) SDL_snprintf(buf, sizeof buf, "NIVEAU %d", g->level_no);
     else SDL_snprintf(buf, sizeof buf, "%s", g->level.name);
-    font_draw(buf, GAME_W / 2.0f, 13, 15, rgb(0xFFFFFF), ALIGN_CENTER);
-    font_draw(DIFFICULTIES[g->diff_index].name, GAME_W / 2.0f, 28, 10, rgb(0x8FB6D8), ALIGN_CENTER);
+    if (retro()) {
+        font_draw_outlined(buf, GAME_W / 2.0f, 18, 15, rgb(0xFFFFFF), ALIGN_CENTER);
+    } else {
+        font_draw(buf, GAME_W / 2.0f, 13, 15, rgb(0xFFFFFF), ALIGN_CENTER);
+        font_draw(DIFFICULTIES[g->diff_index].name, GAME_W / 2.0f, 28, 10, rgb(0x8FB6D8), ALIGN_CENTER);
+    }
 
     if (g->spawn_interval > 0) {
         float bw = 180, bx = GAME_W / 2.0f - bw / 2, by = GAME_H - 20;
@@ -348,7 +455,7 @@ static void draw_hud(const Game *g)
         f = f < 0 ? 0 : (f > 1 ? 1 : f);
         gfx_rrect(bx, by, bw, 8, 4, rgba(0x14325A, 0.35f));
         if (f > 0.02f) gfx_rrect(bx, by, bw * f, 8, 4, f < 0.25f ? rgb(0xFF6B8B) : rgb(0x5FB4EE));
-        font_draw("renfort de boules", GAME_W / 2.0f, by - 8, 10, rgb(0x2A5C8A), ALIGN_CENTER);
+        if (!retro()) font_draw("renfort de boules", GAME_W / 2.0f, by - 8, 10, rgb(0x2A5C8A), ALIGN_CENTER);
     }
     if (g->freeze_t > 0) {
         SDL_snprintf(buf, sizeof buf, "GEL ! %.1f s", g->freeze_t);
@@ -358,7 +465,41 @@ static void draw_hud(const Game *g)
 
 /* ------------------------------------------------------------------------ */
 
+static void draw_game_layers(const Game *g);
+
 void draw_game(const Game *g)
+{
+    SDL_Texture *target = retro() ? retro_target() : NULL;
+    if (!target) {
+        draw_game_layers(g);
+        return;
+    }
+    /* style retro : tout est dessine dans une cible 400x270, puis agrandi sans lissage */
+    SDL_Renderer *r = gfx_renderer();
+    SDL_Texture *prev = SDL_GetRenderTarget(r);
+    float ox, oy;
+    gfx_get_offset(&ox, &oy);
+    float alpha = gfx_get_alpha();
+    SDL_SetRenderTarget(r, target);
+    SDL_SetRenderScale(r, 1.0f / RETRO_SCALE, 1.0f / RETRO_SCALE);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+    SDL_RenderClear(r);
+    gfx_set_offset(0, 0);
+    gfx_set_alpha(1);
+    font_set_pixel_target(true);
+
+    draw_game_layers(g);
+
+    font_set_pixel_target(false);
+    SDL_SetRenderTarget(r, prev);
+    gfx_set_offset(ox, oy);
+    gfx_set_alpha(alpha);
+    SDL_FRect dst = { ox, oy, GAME_W, GAME_H };
+    SDL_SetTextureAlphaModFloat(target, alpha);
+    SDL_RenderTexture(r, target, NULL, &dst);
+}
+
+static void draw_game_layers(const Game *g)
 {
     draw_backdrop(&g->bg, g->clock);
     draw_flakes(g);
@@ -366,6 +507,8 @@ void draw_game(const Game *g)
         draw_ladder(g->level.ladders[i].x, g->level.ladders[i].top, g->level.ladders[i].bottom);
     for (int i = 0; i < g->level.platform_count; i++)
         draw_platform(g->level.platforms[i].x, g->level.platforms[i].y, g->level.platforms[i].w);
+    for (int i = 0; i < g->level.laser_count; i++)
+        draw_laser(g->level.lasers[i].x, g->level.lasers[i].top, g->level.lasers[i].bottom, g->clock);
     for (int i = 0; i < g->pup_n; i++) draw_pup(&g->pups[i]);
     for (int i = 0; i < g->beam_n; i++) draw_beam(&g->beams[i]);
     for (int i = 0; i < g->bullet_n; i++) {
@@ -384,6 +527,7 @@ void draw_game(const Game *g)
         gfx_quad_rot(q->x, q->y, q->size, q->size * 1.6f, q->rot, c);
     }
     if (g->mode == GAMEMODE_DEMO) return;
+    draw_popups(g);
 
     if (g->state == GS_PLAY && g->spawn_interval > 0 && g->spawn_t < 2.5f && g->freeze_t <= 0 &&
         ((int)(g->spawn_t * 6)) % 2 == 0)

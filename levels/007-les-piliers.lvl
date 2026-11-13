@@ -18,6 +18,10 @@ ladder 150 360 500
 ladder 385 360 500
 ladder 620 360 500
 
+# laser <x centre> <haut> <bas>
+laser 60 36 500
+laser 740 36 500
+
 # ball <x> <y> <taille 1-4> <left|right>
 ball 250 160 4 right
 ball 550 160 4 left

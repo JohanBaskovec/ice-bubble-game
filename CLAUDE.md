@@ -22,7 +22,7 @@ SDL_VIDEO_DRIVER=offscreen SDL_RENDER_DRIVER=software SDL_AUDIO_DRIVER=dummy \
   ./build/boules-de-givre --play 3 --screenshot /tmp/shot.bmp --frames 120
 ```
 
-`--script fichier` rejoue des clics et des touches (format décrit dans `src/app.c` et
+`--script fichier` rejoue des clics et des touches (`hold`/`release` maintiennent une touche, ex. le tir ; format décrit dans `src/app.c` et
 `tests/editor_smoke.script`) ; la commande `shot` du script fait une capture. Convertir
 les BMP en PNG avec `convert` (ImageMagick) avant de les lire.
 
@@ -31,6 +31,9 @@ dans `platforms/android`, iOS : `cmake --preset ios` sur macOS).
 
 ## Règles du projet
 
+- **Style rétro** : évoque l'époque VGA (256 couleurs, quadrillages, fruits) avec notre
+  propre palette et nos propres dessins ; ne pas reproduire couleurs, décors ou sprites
+  d'un jeu existant.
 - **Création originale uniquement.** Le jeu s'inspire d'un genre d'arcade (tirer sur des
   boules qui se divisent) mais tout est original : nom, personnages (bonshommes de neige),
   boules de Noël, décors, musique, sons, niveaux. Ne jamais reprendre le nom, les graphismes,
@@ -61,7 +64,8 @@ dans `platforms/android`, iOS : `cmake --preset ios` sur macOS).
 | `src/scene_editor.c` | Éditeur de niveaux (outils, sélection, annuler/rétablir, fichiers, test) |
 | `src/scene_menu.c`, `scene_levels.c`, `scene_options.c` | Menus |
 | `src/ui.c` | Mini-UI en mode immédiat (boutons, champs texte, navigation clavier/manette) |
-| `src/gfx.c`, `src/font.c` | Primitives vectorielles sur `SDL_RenderGeometry`, texte via stb_truetype |
+| `src/gfx.c`, `src/font.c` | Primitives vectorielles sur `SDL_RenderGeometry`, texte via stb_truetype (ou police pixel 8×8 en style rétro) |
+| `src/retro.c` | Style rétro : palette 256 couleurs, pixel art généré (boules, bonshommes, fruits, quadrillages, 3 décors), cible 400×270 |
 | `src/input.c` | Clavier, manettes, commandes tactiles → `PlayerInput` par joueur |
 | `src/audio.c` | Synthé : musique séquencée + effets, dans le callback audio SDL |
 
@@ -92,8 +96,12 @@ L'éditeur utilise un espace logique plus grand (1100×640) avec le terrain déc
   `level_serialize`, `level_clamp`, test dans `tests/test_level.c`, puis
   `docs/LEVEL_FORMAT.md`. Incrémenter `LEVEL_FORMAT_VERSION` seulement si un ancien jeu ne
   peut pas lire le nouveau fichier ; les clés inconnues sont ignorées.
-- **Un bonus** : `PupKind` dans `game.h`, poids dans `drop_pup`, effet dans `apply_pup`,
-  couleur/icône dans `game_draw.c` (`PUP_COLORS`, `pup_icon`).
+- **Un bonus** : `PupKind` dans `game.h` (avant `PUP_FRUIT`), poids dans `drop_pup`, effet
+  dans `apply_pup`, couleur/icône dans `game_draw.c` (`PUP_COLORS`, `pup_icon`).
+- **Un fruit** : `FRUIT_COUNT`, `FRUIT_NAMES/POINTS/WEIGHTS` et dessin ASCII `FRUIT_ART`
+  (12×12, lettres → couleurs dans `fruit_color`) dans `retro.c`.
+- **Un décor rétro** : `BACKDROP_COUNT` (`level.h`), une entrée `WORLDS` dans `retro.c`,
+  le nom dans le panneau de l'éditeur (`level_props`) et `docs/LEVEL_FORMAT.md`.
 - **Un son** : entrée dans `Sfx` (`audio.h`) et recette dans `audio_play`.
 
 ## Vérifications avant de livrer

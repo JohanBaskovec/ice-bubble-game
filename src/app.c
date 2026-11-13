@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "config.h"
 #include "font.h"
+#include "retro.h"
 #include "game.h"
 #include "gfx.h"
 #include "input.h"
@@ -20,7 +21,8 @@ static int g_frame;
 
 /* --script : rejoue des entrees (coordonnees logiques) pour les tests.
  * Une commande par ligne : "<image> down|up|move|rdown x y", "<image> key NOM [ctrl|shift]",
- * "<image> text CHAINE", "<image> shot fichier.bmp", "<image> quit". */
+ * "<image> text CHAINE", "<image> shot fichier.bmp", "<image> quit",
+ * "<image> hold NOM" / "<image> release NOM" : maintenir / relacher une touche (ex. Space). */
 static char *g_script;
 static char *g_script_pos;
 static char g_script_shot[256];      /* capture demandee, faite apres le dessin */
@@ -71,6 +73,9 @@ static void script_step(void)
             e.type = SDL_EVENT_TEXT_INPUT;
             e.text.text = t;
             ui_handle_event(&e);
+            continue;
+        } else if (!SDL_strcmp(cmd, "hold") || !SDL_strcmp(cmd, "release")) {
+            input_force_key(SDL_GetScancodeFromName(a), cmd[0] == 'h');
             continue;
         } else if (!SDL_strcmp(cmd, "shot")) {
             SDL_strlcpy(g_script_shot, a, sizeof g_script_shot);
@@ -157,6 +162,7 @@ bool app_init(int argc, char **argv)
 
     gfx_init(g_app.renderer);
     if (!font_init(g_app.renderer)) return false;
+    if (!retro_init(g_app.renderer)) SDL_Log("style retro indisponible : %s", SDL_GetError());
     audio_init();
     input_init();
     ui_init(g_app.window);
@@ -281,6 +287,8 @@ void app_iterate(void)
 
     if (g_script) script_step();
     ui_begin_frame();
+    /* police pixel en style retro, sauf dans l'editeur (outil dense en texte) */
+    font_set_pixel(g_settings.retro && g_app.scene != SCENE_EDITOR);
     switch (g_app.scene) {
     case SCENE_MENU: menu_frame(dt); break;
     case SCENE_LEVELS: levels_frame(dt); break;

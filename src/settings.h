@@ -13,6 +13,7 @@ typedef struct Settings {
     int best_score;
     int players;            /* dernier choix 1/2 */
     int difficulty;         /* 0..3 */
+    bool retro;             /* style graphique retro (pixel art 256 couleurs) */
 } Settings;
 
 extern Settings g_settings;

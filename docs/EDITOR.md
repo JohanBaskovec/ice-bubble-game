@@ -16,11 +16,12 @@ Accessible depuis le menu principal (« Éditeur »), depuis « Mes niveaux » (
 
 | Outil | Touche | Utilisation |
 |---|---|---|
-| Sélection | V | Clic : sélectionner. Glisser : déplacer. Poignées : élargir une plateforme (bords) ou allonger une échelle (haut/bas). |
+| Sélection | V | Clic : sélectionner. Glisser : déplacer. Poignées : élargir une plateforme (bords) ou allonger une échelle ou un laser (haut/bas). |
 | Plateforme | P | Glisser horizontalement pour tracer. Clic simple : plateforme de 120. |
 | Échelle | L | Clic sur une plateforme : échelle de son sommet jusqu'à la surface du dessous. Clic dans le vide : échelle depuis ce point. |
 | Boule | B | Clic : poser une boule avec la taille (1 à 4) et la direction du panneau. Clic sur une boule existante : la déplacer. |
 | Départ J1 / J2 | 1 / 2 | Clic : position de départ, posée automatiquement sur la surface en dessous. |
+| Laser | R | Clic : laser vertical, du plafond (ou du dessous de la plateforme au-dessus) jusqu'à la surface en dessous. Les boules rebondissent dessus, les joueurs le traversent. |
 | Gomme | E | Clic : effacer l'objet sous le curseur. |
 
 **Clic droit** : efface l'objet sous le curseur, quel que soit l'outil.
@@ -46,7 +47,10 @@ Sur Mac, Cmd remplace Ctrl.
 ## Panneau « Niveau »
 
 - **Nom** : affiché en jeu et utilisé pour nommer le fichier.
-- **Teinte** : couleur du ciel (par pas de 15°).
+- **Décor** (style rétro) : Auto, Lac, Crépuscule ou Nuit. « Auto » prend le décor de la
+  tranche de 10 niveaux en campagne.
+- **Teinte** (style moderne) : couleur du ciel (par pas de 15°). Le panneau montre l'un
+  ou l'autre selon le style choisi dans les options.
 - **Renforts** : boules qui tombent du plafond régulièrement. « Selon difficulté » (36 s en
   Débutant, 16 s en Expert), « Aucun », ou un intervalle fixe de 5 à 120 s.
 - **Grille** et **Trajectoires** : la seconde option affiche le trajet de chaque boule

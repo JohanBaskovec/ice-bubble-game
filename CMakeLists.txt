@@ -5,9 +5,8 @@ project(BoulesDeGivre
     DESCRIPTION "Boules de Givre - jeu d'arcade C/SDL3"
     LANGUAGES C)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS OFF)
+# Standard C applique seulement a nos cibles (bdg_settings) : SDL garde ses propres reglages
+# (son code Emscripten a besoin des extensions GNU).
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -90,6 +89,7 @@ set(BDG_GAME_SOURCES
     src/main.c
     src/app.c
     src/gfx.c
+    src/retro.c
     src/font.c
     src/audio.c
     src/input.c
@@ -108,7 +108,18 @@ set(BDG_GAME_SOURCES
 add_library(bdg_core STATIC ${BDG_CORE_SOURCES})
 target_include_directories(bdg_core PUBLIC src)
 
+function(bdg_settings target)
+    set_target_properties(${target} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+    if(EMSCRIPTEN)
+        # EM_ASM (storage.c) exige le mode gnu11
+        set_target_properties(${target} PROPERTIES C_EXTENSIONS ON)
+    else()
+        set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+    endif()
+endfunction()
+
 function(bdg_warnings target)
+    bdg_settings(${target})
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4)
     else()
@@ -128,7 +139,7 @@ else()
     set(BDG_GAME_TARGET boules-de-givre)
 endif()
 
-target_include_directories(${BDG_GAME_TARGET} PRIVATE src third_party/stb)
+target_include_directories(${BDG_GAME_TARGET} PRIVATE src third_party/stb third_party/font8x8)
 target_link_libraries(${BDG_GAME_TARGET} PRIVATE bdg_core SDL3::SDL3)
 target_compile_definitions(${BDG_GAME_TARGET} PRIVATE
     BDG_VERSION="${PROJECT_VERSION}"

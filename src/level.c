@@ -159,6 +159,18 @@ bool level_parse(Level *out, const char *text, size_t len, char *err, size_t err
                 return false;
             }
             lvl.hue = ((v % 360) + 360) % 360;
+        } else if (strcmp(key, "backdrop") == 0) {
+            int v;
+            if (argc != 1) {
+                set_err(err, err_cap, line_no, "format attendu : backdrop auto|<1-%d>", BACKDROP_COUNT);
+                return false;
+            }
+            if (strcmp(argv[0], "auto") == 0) lvl.backdrop = 0;
+            else if (parse_int(argv[0], &v) && v >= 1 && v <= BACKDROP_COUNT) lvl.backdrop = v;
+            else {
+                set_err(err, err_cap, line_no, "decor : 'auto' ou 1 a %d", BACKDROP_COUNT);
+                return false;
+            }
         } else if (strcmp(key, "reinforcements") == 0) {
             float v;
             if (argc != 1) {
@@ -206,6 +218,18 @@ bool level_parse(Level *out, const char *text, size_t len, char *err, size_t err
                 return false;
             }
             lvl.ladders[lvl.ladder_count++] = l;
+        } else if (strcmp(key, "laser") == 0) {
+            LevelLaser z;
+            if (argc != 3 || !parse_num(argv[0], &z.x) || !parse_num(argv[1], &z.top) ||
+                !parse_num(argv[2], &z.bottom)) {
+                set_err(err, err_cap, line_no, "format attendu : laser <x> <haut> <bas>");
+                return false;
+            }
+            if (lvl.laser_count >= LEVEL_MAX_LASERS) {
+                set_err(err, err_cap, line_no, "trop de lasers (max %d)", LEVEL_MAX_LASERS);
+                return false;
+            }
+            lvl.lasers[lvl.laser_count++] = z;
         } else if (strcmp(key, "ball") == 0) {
             LevelBall b;
             int size;
@@ -286,6 +310,8 @@ size_t level_serialize(const Level *lvl, char *buf, size_t cap)
     wr(&w, "\"\n");
 
     wr(&w, "hue %d\n", lvl->hue);
+    if (lvl->backdrop > 0) wr(&w, "backdrop %d\n", lvl->backdrop);
+    else wr(&w, "backdrop auto\n");
     if (lvl->reinforce == REINFORCE_DEFAULT) wr(&w, "reinforcements default\n");
     else if (lvl->reinforce < 0) wr(&w, "reinforcements off\n");
     else wr(&w, "reinforcements %s\n", num(a, sizeof a, lvl->reinforce));
@@ -309,6 +335,13 @@ size_t level_serialize(const Level *lvl, char *buf, size_t cap)
            num(c, sizeof c, l->bottom));
     }
 
+    if (lvl->laser_count) wr(&w, "\n# laser <x centre> <haut> <bas>\n");
+    for (int i = 0; i < lvl->laser_count; i++) {
+        const LevelLaser *z = &lvl->lasers[i];
+        wr(&w, "laser %s %s %s\n", num(a, sizeof a, z->x), num(b, sizeof b, z->top),
+           num(c, sizeof c, z->bottom));
+    }
+
     if (lvl->ball_count) wr(&w, "\n# ball <x> <y> <taille 1-4> <left|right>\n");
     for (int i = 0; i < lvl->ball_count; i++) {
         const LevelBall *bl = &lvl->balls[i];
@@ -329,8 +362,9 @@ static const float BALL_RADIUS[BALL_SIZES] = { 9, 15, 23, 33 };
 void level_clamp(Level *lvl)
 {
     lvl->hue = ((lvl->hue % 360) + 360) % 360;
+    if (lvl->backdrop < 0 || lvl->backdrop > BACKDROP_COUNT) lvl->backdrop = 0;
     for (int i = 0; i < 2; i++) {
-        lvl->start[i].x = clampf(lvl->start[i].x, 14, GAME_W - 14);
+        lvl->start[i].x = clampf(lvl->start[i].x, WALL_W + 14, GAME_W - WALL_W - 14);
         lvl->start[i].y = clampf(lvl->start[i].y, CEIL_Y + 50, FLOOR_Y);
     }
     for (int i = 0; i < lvl->platform_count; i++) {
@@ -341,9 +375,15 @@ void level_clamp(Level *lvl)
     }
     for (int i = 0; i < lvl->ladder_count; i++) {
         LevelLadder *l = &lvl->ladders[i];
-        l->x = clampf(l->x, 0, GAME_W - LADDER_W);
+        l->x = clampf(l->x, WALL_W, GAME_W - WALL_W - LADDER_W);
         l->bottom = clampf(l->bottom, CEIL_Y + 40, FLOOR_Y);
         l->top = clampf(l->top, CEIL_Y + 20, l->bottom - 20);
+    }
+    for (int i = 0; i < lvl->laser_count; i++) {
+        LevelLaser *z = &lvl->lasers[i];
+        z->x = clampf(z->x, WALL_W + LASER_W, GAME_W - WALL_W - LASER_W);
+        z->bottom = clampf(z->bottom, CEIL_Y + 30, FLOOR_Y);
+        z->top = clampf(z->top, CEIL_Y, z->bottom - 30);
     }
     for (int i = 0; i < lvl->ball_count; i++) {
         LevelBall *b = &lvl->balls[i];
@@ -351,7 +391,7 @@ void level_clamp(Level *lvl)
         if (b->size >= BALL_SIZES) b->size = BALL_SIZES - 1;
         b->dir = b->dir < 0 ? -1 : 1;
         float r = BALL_RADIUS[b->size];
-        b->x = clampf(b->x, r, GAME_W - r);
+        b->x = clampf(b->x, WALL_W + r, GAME_W - WALL_W - r);
         b->y = clampf(b->y, CEIL_Y + r, FLOOR_Y - r);
     }
 }
@@ -376,6 +416,13 @@ int level_validate(const Level *lvl, char *msg, size_t msg_cap)
             float dx = b->x - cx, dy = b->y - cy;
             if (dx * dx + dy * dy < r * r) {
                 PROBLEM("La boule %d touche une plateforme.", i + 1);
+                break;
+            }
+        }
+        for (int j = 0; j < lvl->laser_count; j++) {
+            const LevelLaser *z = &lvl->lasers[j];
+            if (fabsf(b->x - z->x) < r + LASER_W / 2.0f && b->y + r > z->top && b->y - r < z->bottom) {
+                PROBLEM("La boule %d touche un laser.", i + 1);
                 break;
             }
         }

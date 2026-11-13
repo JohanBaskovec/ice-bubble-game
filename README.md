@@ -48,6 +48,7 @@ P / Échap : pause · M : musique · F11 : plein écran.
 - Code du jeu : à définir par l'auteur (voir `docs/RELEASE.md`).
 - [SDL3](https://libsdl.org) : licence zlib.
 - [stb_truetype](https://github.com/nothings/stb) : domaine public / MIT.
+- [font8x8](https://github.com/dhepper/font8x8) (police bitmap du style rétro) : domaine public.
 - Police [Fredoka](https://github.com/hafontia/Fredoka-One) : SIL Open Font License 1.1
   (`assets/fonts/OFL-Fredoka.txt`). Instance statique SemiBold générée depuis la police
   variable.

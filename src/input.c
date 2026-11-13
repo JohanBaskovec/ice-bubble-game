@@ -141,6 +141,16 @@ static void pad_state(SDL_Gamepad *p, PlayerInput *in)
         in->fire = true;
 }
 
+/* touches maintenues par le lecteur de scripts (tests) */
+static bool g_forced[SDL_SCANCODE_COUNT];
+
+void input_force_key(SDL_Scancode sc, bool down)
+{
+    if (sc > SDL_SCANCODE_UNKNOWN && sc < SDL_SCANCODE_COUNT) g_forced[sc] = down;
+}
+
+static bool key(const bool *k, SDL_Scancode sc) { return k[sc] || g_forced[sc]; }
+
 PlayerInput input_player(int index, int player_count)
 {
     PlayerInput in = { 0 };
@@ -148,20 +158,21 @@ PlayerInput input_player(int index, int player_count)
     bool solo = player_count < 2;
 
     if (solo || index == 0) {
-        in.left |= k[SDL_SCANCODE_LEFT];
-        in.right |= k[SDL_SCANCODE_RIGHT];
-        in.up |= k[SDL_SCANCODE_UP];
-        in.down |= k[SDL_SCANCODE_DOWN];
-        in.fire |= k[SDL_SCANCODE_SPACE] || k[SDL_SCANCODE_RETURN] || k[SDL_SCANCODE_RCTRL] || k[SDL_SCANCODE_KP_0];
+        in.left |= key(k, SDL_SCANCODE_LEFT);
+        in.right |= key(k, SDL_SCANCODE_RIGHT);
+        in.up |= key(k, SDL_SCANCODE_UP);
+        in.down |= key(k, SDL_SCANCODE_DOWN);
+        in.fire |= key(k, SDL_SCANCODE_SPACE) || key(k, SDL_SCANCODE_RETURN) || key(k, SDL_SCANCODE_RCTRL) ||
+                   key(k, SDL_SCANCODE_KP_0);
         touch_state(&in);
     }
     if (solo || index == 1) {
         /* scancodes = position physique : WASD en QWERTY = ZQSD en AZERTY */
-        in.left |= k[SDL_SCANCODE_A];
-        in.right |= k[SDL_SCANCODE_D];
-        in.up |= k[SDL_SCANCODE_W];
-        in.down |= k[SDL_SCANCODE_S];
-        in.fire |= k[SDL_SCANCODE_F] || k[SDL_SCANCODE_G] || k[SDL_SCANCODE_LSHIFT];
+        in.left |= key(k, SDL_SCANCODE_A);
+        in.right |= key(k, SDL_SCANCODE_D);
+        in.up |= key(k, SDL_SCANCODE_W);
+        in.down |= key(k, SDL_SCANCODE_S);
+        in.fire |= key(k, SDL_SCANCODE_F) || key(k, SDL_SCANCODE_G) || key(k, SDL_SCANCODE_LSHIFT);
     }
     if (solo) {
         for (int i = 0; i < MAX_PADS; i++) pad_state(g_pads[i], &in);

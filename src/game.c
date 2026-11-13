@@ -1,4 +1,5 @@
 #include "game.h"
+#include "retro.h"
 #include "app.h"
 #include "audio.h"
 #include "config.h"
@@ -21,7 +22,8 @@ Game g_game;
 static const float GRAVITY = 520.0f;      /* gravite des boules */
 static const float BALL_VX = 100.0f;
 const float BALL_R[4] = { 9, 15, 23, 33 };
-static const float BALL_H[4] = { 95, 165, 235, 300 };   /* hauteur de rebond */
+/* hauteur de rebond : toutes les tailles rebondissent aussi haut que la geante */
+static const float BALL_H[4] = { 300, 300, 300, 300 };
 static const int BALL_POINTS[4] = { 200, 150, 100, 50 };
 static float BALL_V[4];                                 /* sqrt(2 g h) */
 
@@ -130,7 +132,7 @@ static void burst(Game *g, float x, float y, Uint32 col, int n)
 static void reset_player_pos(Game *g, Player *p)
 {
     const LevelStart *s = &g->level.start[p->index];
-    p->x = clampf(s->x - p->w / 2, 0, GAME_W - p->w);
+    p->x = clampf(s->x - p->w / 2, WALL_W, GAME_W - WALL_W - p->w);
     p->y = s->y - p->h;
     p->vy = 0;
     p->climb = false;
@@ -169,7 +171,7 @@ static void init_flakes(Game *g)
 static void setup_level(Game *g, const Level *lvl, int seed)
 {
     g->level = *lvl;
-    g->ball_n = g->beam_n = g->bullet_n = g->pup_n = g->part_n = 0;
+    g->ball_n = g->beam_n = g->bullet_n = g->pup_n = g->part_n = g->popup_n = 0;
     for (int i = 0; i < lvl->ball_count; i++)
         add_ball(g, lvl->balls[i].x, lvl->balls[i].y, lvl->balls[i].size, lvl->balls[i].dir);
     /* tours supplementaires de la campagne : boules en renfort */
@@ -193,11 +195,19 @@ static void setup_level(Game *g, const Level *lvl, int seed)
         Player *p = &g->players[i];
         if (p->alive) {
             reset_player_pos(g, p);
-            p->rapid = p->dbl = 0;
+            p->rapid = p->dbl = p->stick = false;
             p->inv = 0;
         }
     }
     backdrop_build(&g->bg, lvl->hue + g->loop_n * 25, seed);
+    g->bg.world = game_world_for(lvl, g->level_no);
+}
+
+int game_world_for(const Level *lvl, int level_no)
+{
+    if (lvl->backdrop >= 1 && lvl->backdrop <= BACKDROP_COUNT) return lvl->backdrop;
+    if (level_no > 0) return (level_no - 1) / 10 % BACKDROP_COUNT + 1;
+    return 1;
 }
 
 static bool load_campaign_level(Game *g, int n)
@@ -314,8 +324,6 @@ static void update_player(Game *g, Player *p, float dt)
     PlayerInput in = input_player(p->index, g->players_n);
     p->inv = fmaxf(0, p->inv - dt);
     p->cool -= dt;
-    p->rapid = fmaxf(0, p->rapid - dt);
-    p->dbl = fmaxf(0, p->dbl - dt);
 
     int lad = ladder_at(g, p);
     if (!p->climb && lad >= 0 && p->ground) {
@@ -344,7 +352,7 @@ static void update_player(Game *g, Player *p, float dt)
     }
     if (!p->climb) {
         int dx = (in.right ? 1 : 0) - (in.left ? 1 : 0);
-        p->x = clampf(p->x + dx * 175 * dt, 0, GAME_W - p->w);
+        p->x = clampf(p->x + dx * 175 * dt, WALL_W, GAME_W - WALL_W - p->w);
         if (dx) {
             p->face = dx;
             p->moving = true;
@@ -370,21 +378,31 @@ static void update_player(Game *g, Player *p, float dt)
             p->ground = false;
         }
     }
-    if (in.fire && p->cool <= 0 && g->state == GS_PLAY) {
+    bool pressed = in.fire && !p->fire_held;
+    p->fire_held = in.fire;
+    if (g->state == GS_PLAY && p->rapid) {
+        /* tir rapide : rafale tant que le bouton est maintenu */
+        if (in.fire && p->cool <= 0 && g->bullet_n < MAX_BULLETS) {
+            float x = p->x + p->w / 2, base = p->y + p->h;
+            g->bullets[g->bullet_n++] = (Bullet){ x, p->y + 4, limit_above(g, x, base), p->index };
+            p->cool = 0.1f;
+            audio_play(SFX_PEW, 0);
+        }
+    } else if (g->state == GS_PLAY && pressed) {
+        /* colonne : un tir par appui, sans attendre. Au maximum, la derniere colonne
+         * tiree est remplacee (les precedentes restent). */
         float x = p->x + p->w / 2, base = p->y + p->h;
-        if (p->rapid > 0) {
-            if (g->bullet_n < MAX_BULLETS) {
-                g->bullets[g->bullet_n++] = (Bullet){ x, p->y + 4, limit_above(g, x, base), p->index };
-                p->cool = 0.1f;
-                audio_play(SFX_PEW, 0);
-            }
-        } else {
-            int max = p->dbl > 0 ? 2 : 1;
-            if (beams_of(g, p->index) < max && g->beam_n < MAX_BEAMS) {
-                g->beams[g->beam_n++] = (Beam){ x, base, base - 6, limit_above(g, x, base), p->index };
-                p->cool = 0.2f;
-                audio_play(SFX_SHOOT, 0);
-            }
+        int max = p->dbl ? 2 : 1;
+        if (beams_of(g, p->index) >= max) {
+            int last = -1;
+            for (int i = 0; i < g->beam_n; i++)
+                if (g->beams[i].owner == p->index && (last < 0 || g->beams[i].seq > g->beams[last].seq)) last = i;
+            if (last >= 0) g->beams[last] = g->beams[--g->beam_n];
+        }
+        if (g->beam_n < MAX_BEAMS) {
+            g->beams[g->beam_n++] = (Beam){ x, base, base - 6, limit_above(g, x, base), p->index,
+                                            p->stick ? 3.0f : 0, ++g->beam_seq };
+            audio_play(SFX_SHOOT, 0);
         }
     }
 }
@@ -408,7 +426,6 @@ static void hurt(Game *g, Player *p)
     p->lives--;
     audio_play(SFX_HURT, 0);
     burst(g, p->x + 14, p->y + 22, 0xFFFFFF, 30);
-    p->rapid = p->dbl = 0;
     if (p->lives > 0) {
         reset_player_pos(g, p);
         p->inv = 2.5f;
@@ -423,6 +440,30 @@ static void hurt(Game *g, Player *p)
 /* ------------------------------------------------------------------------ */
 /* Boules                                                                   */
 
+static void ball_vs_rect(Ball *b, float r, float x, float y, float w, float h)
+{
+    float cx = clampf(b->x, x, x + w), cy = clampf(b->y, y, y + h);
+    float dx = b->x - cx, dy = b->y - cy;
+    if (dx * dx + dy * dy >= r * r) return;
+    if (b->x >= x && b->x <= x + w) {
+        if (b->y < y + h / 2.0f) { b->y = y - r; b->vy = -BALL_V[b->size]; }
+        else { b->y = y + h + r; b->vy = fabsf(b->vy); }
+    } else if (b->y >= y && b->y <= y + h) {
+        if (b->x < x) { b->x = x - r; b->vx = -fabsf(b->vx); }
+        else { b->x = x + w + r; b->vx = fabsf(b->vx); }
+    } else {
+        float d = sqrtf(dx * dx + dy * dy);
+        if (d < 0.0001f) d = 1;
+        float nx = dx / d, ny = dy / d;
+        b->x = cx + nx * r;
+        b->y = cy + ny * r;
+        float dot = b->vx * nx + b->vy * ny;
+        if (dot < 0) { b->vx -= 2 * dot * nx; b->vy -= 2 * dot * ny; }
+        if (ny < -0.4f) b->vy = -BALL_V[b->size];
+        b->vx = (b->vx < 0 ? -1 : 1) * BALL_VX;
+    }
+}
+
 void game_ball_step(const Level *lvl, Ball *b, float dt)
 {
     if (BALL_V[0] == 0) init_constants();
@@ -430,32 +471,18 @@ void game_ball_step(const Level *lvl, Ball *b, float dt)
     b->vy += GRAVITY * dt;
     b->x += b->vx * dt;
     b->y += b->vy * dt;
-    if (b->x - r < 0) { b->x = r; b->vx = fabsf(b->vx); }
-    if (b->x + r > GAME_W) { b->x = GAME_W - r; b->vx = -fabsf(b->vx); }
+    if (b->x - r < WALL_W) { b->x = WALL_W + r; b->vx = fabsf(b->vx); }
+    if (b->x + r > GAME_W - WALL_W) { b->x = GAME_W - WALL_W - r; b->vx = -fabsf(b->vx); }
     if (b->y - r < CEIL_Y) { b->y = CEIL_Y + r; b->vy = fabsf(b->vy); }
     if (b->y + r > FLOOR_Y) { b->y = FLOOR_Y - r; b->vy = -BALL_V[b->size]; }
     for (int j = 0; j < lvl->platform_count; j++) {
         const LevelPlatform *pl = &lvl->platforms[j];
-        float cx = clampf(b->x, pl->x, pl->x + pl->w), cy = clampf(b->y, pl->y, pl->y + PLAT_H);
-        float dx = b->x - cx, dy = b->y - cy;
-        if (dx * dx + dy * dy >= r * r) continue;
-        if (b->x >= pl->x && b->x <= pl->x + pl->w) {
-            if (b->y < pl->y + PLAT_H / 2.0f) { b->y = pl->y - r; b->vy = -BALL_V[b->size]; }
-            else { b->y = pl->y + PLAT_H + r; b->vy = fabsf(b->vy); }
-        } else if (b->y >= pl->y && b->y <= pl->y + PLAT_H) {
-            if (b->x < pl->x) { b->x = pl->x - r; b->vx = -fabsf(b->vx); }
-            else { b->x = pl->x + pl->w + r; b->vx = fabsf(b->vx); }
-        } else {
-            float d = sqrtf(dx * dx + dy * dy);
-            if (d < 0.0001f) d = 1;
-            float nx = dx / d, ny = dy / d;
-            b->x = cx + nx * r;
-            b->y = cy + ny * r;
-            float dot = b->vx * nx + b->vy * ny;
-            if (dot < 0) { b->vx -= 2 * dot * nx; b->vy -= 2 * dot * ny; }
-            if (ny < -0.4f) b->vy = -BALL_V[b->size];
-            b->vx = (b->vx < 0 ? -1 : 1) * BALL_VX;
-        }
+        ball_vs_rect(b, r, pl->x, pl->y, pl->w, PLAT_H);
+    }
+    /* lasers : les boules rebondissent dessus comme sur un mur fin */
+    for (int j = 0; j < lvl->laser_count; j++) {
+        const LevelLaser *z = &lvl->lasers[j];
+        ball_vs_rect(b, r, z->x - LASER_W / 2.0f, z->top, LASER_W, z->bottom - z->top);
     }
 }
 
@@ -466,15 +493,31 @@ static void update_balls(Game *g, float dt)
 
 static void drop_pup(Game *g, float x, float y)
 {
-    static const int weights[PUP_KINDS] = { 3, 3, 2, 2, 1 };
+    static const int weights[PUP_FRUIT] = { 3, 3, 2, 2, 1, 3 };
     if (g->pup_n >= MAX_PUPS) return;
-    float t = frand(0, 11);
+    float t = frand(0, 14);
     PupKind k = PUP_RAPID;
-    for (int i = 0; i < PUP_KINDS; i++) {
+    for (int i = 0; i < PUP_FRUIT; i++) {
         if (t < weights[i]) { k = (PupKind)i; break; }
         t -= weights[i];
     }
-    g->pups[g->pup_n++] = (Pup){ x - 11, y - 11, 0, 9, k };
+    g->pups[g->pup_n++] = (Pup){ x - 11, y - 11, 0, k, 0 };
+}
+
+static void drop_fruit(Game *g, float x, float y)
+{
+    if (g->pup_n >= MAX_PUPS) return;
+    int total = 0;
+    for (int i = 0; i < FRUIT_COUNT; i++) total += FRUIT_WEIGHTS[i];
+    int t = SDL_rand(total), f = 0;
+    while (f < FRUIT_COUNT - 1 && t >= FRUIT_WEIGHTS[f]) t -= FRUIT_WEIGHTS[f++];
+    g->pups[g->pup_n++] = (Pup){ x - 11, y - 11, 0, PUP_FRUIT, f };
+}
+
+static void add_popup(Game *g, float x, float y, int value)
+{
+    if (g->popup_n >= MAX_POPUPS) g->popups[0] = g->popups[--g->popup_n];
+    g->popups[g->popup_n++] = (Popup){ x, y, 1.2f, value };
 }
 
 static void pop_ball(Game *g, int i, int owner)
@@ -490,18 +533,22 @@ static void pop_ball(Game *g, int i, int owner)
             g->balls[g->ball_n - 1].vy = -fmaxf(230, BALL_V[b.size - 1] * 0.7f);
         }
     }
-    if (SDL_randf() < 0.16f) drop_pup(g, b.x, b.y);
+    float roll = SDL_randf();
+    if (roll < 0.16f) drop_pup(g, b.x, b.y);
+    else if (roll < 0.30f) drop_fruit(g, b.x, b.y);
 }
 
 static void apply_pup(Game *g, Player *p, PupKind k)
 {
     audio_play(SFX_POWER, 0);
     switch (k) {
-    case PUP_RAPID: p->rapid = 8; p->dbl = 0; break;
-    case PUP_DOUBLE: p->dbl = 12; p->rapid = 0; break;
+    case PUP_RAPID: p->rapid = true; p->dbl = p->stick = false; break;
+    case PUP_DOUBLE: p->dbl = true; p->rapid = false; break;
     case PUP_FREEZE: g->freeze_t = 4.5f; audio_play(SFX_FREEZE, 0); break;
     case PUP_SHIELD: p->shield = true; break;
     case PUP_LIFE: p->lives++; break;
+    case PUP_STICK: p->stick = true; p->rapid = false; break;
+    case PUP_FRUIT: break;
     default: break;
     }
 }
@@ -584,13 +631,23 @@ static void update_play(Game *g, float dt)
     /* rayons de givre */
     for (int j = g->beam_n - 1; j >= 0; j--) {
         Beam *bm = &g->beams[j];
-        bm->top -= 680 * dt;
         bool gone = false;
-        if (bm->top <= bm->stop) {
-            bm->top = bm->stop;
-            burst(g, bm->x, bm->stop + 4, 0xC9F2FF, 5);
-            gone = true;
+        if (bm->top > bm->stop) {
+            bm->top -= 680 * dt;
+            if (bm->top <= bm->stop) {
+                /* la colonne touche le haut : elle disparait, sauf avec le batonnet de glace */
+                bm->top = bm->stop;
+                burst(g, bm->x, bm->stop + 4, 0xC9F2FF, 5);
+                if (bm->hold <= 0) gone = true;
+            }
         } else {
+            bm->hold -= dt;
+            if (bm->hold <= 0) {
+                burst(g, bm->x, (bm->top + bm->base) / 2, 0xC9F2FF, 8);
+                gone = true;
+            }
+        }
+        if (!gone) {
             for (int i = g->ball_n - 1; i >= 0; i--) {
                 Ball *b = &g->balls[i];
                 if (circ_rect(b->x, b->y, BALL_R[b->size], bm->x - 3, bm->top, 6, bm->base - bm->top)) {
@@ -623,8 +680,6 @@ static void update_play(Game *g, float dt)
     /* bonus */
     for (int j = g->pup_n - 1; j >= 0; j--) {
         Pup *u = &g->pups[j];
-        u->life -= dt;
-        if (u->life <= 0) { g->pups[j] = g->pups[--g->pup_n]; continue; }
         float prev = u->y + 22;
         u->vy += 600 * dt;
         u->y += u->vy * dt;
@@ -639,12 +694,25 @@ static void update_play(Game *g, float dt)
         for (int i = 0; i < g->players_n; i++) {
             Player *p = &g->players[i];
             if (p->alive && u->x < p->x + p->w && u->x + 22 > p->x && u->y < p->y + p->h && u->y + 22 > p->y) {
-                apply_pup(g, p, u->kind);
+                if (u->kind == PUP_FRUIT) {
+                    int pts = FRUIT_POINTS[u->fruit];
+                    p->score += pts;
+                    add_popup(g, u->x + 11, u->y, pts);
+                    audio_play(SFX_POWER, 0);
+                } else {
+                    apply_pup(g, p, u->kind);
+                }
                 burst(g, u->x + 11, u->y + 11, 0xFFF7A8, 12);
                 g->pups[j] = g->pups[--g->pup_n];
                 break;
             }
         }
+    }
+    for (int j = g->popup_n - 1; j >= 0; j--) {
+        Popup *q = &g->popups[j];
+        q->life -= dt;
+        q->y -= 40 * dt;
+        if (q->life <= 0) g->popups[j] = g->popups[--g->popup_n];
     }
     update_parts(g, dt);
 
@@ -705,6 +773,7 @@ void game_demo_init(void)
     add_ball(g, 380, 120, 1, 1);
     init_flakes(g);
     backdrop_build(&g->bg, 215, 42);
+    g->bg.world = 1;
 }
 
 void game_demo_frame(float dt)

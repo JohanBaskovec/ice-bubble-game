@@ -11,6 +11,11 @@
   propriétés du niveau, ouvrir / enregistrer / enregistrer sous, test immédiat.
 - Menus : principal, niveaux (jouer / éditer / supprimer), options.
 - Projets Web, Android et iOS, icônes, CI, tests automatiques.
+- Style rétro (option, par défaut) : palette de 256 couleurs, pixel art généré en code,
+  3 décors (lac de montagne, crépuscule, nuit boréale), quadrillages, police bitmap.
+- Fruits bonus de points (8 fruits, 100 à 2000 points).
+- Lasers (barrières que seules les boules ne traversent pas), bonus « bâtonnet de glace »
+  (colonnes accrochées au plafond), rebond haut pour toutes les tailles de boules.
 
 ## À faire avant la première sortie
 

@@ -1,6 +1,7 @@
 /* Tests du format de niveau : lecture, ecriture, aller-retour, erreurs,
  * et validation de tous les niveaux de la campagne (levels/<nom>.lvl). */
 #include "level.h"
+#include "config.h"
 
 #include <dirent.h>
 #include <math.h>
@@ -23,11 +24,13 @@ static const char *SAMPLE =
     "format 1\n"
     "name \"Le \\\"grand\\\" pont\"\n"
     "hue 230\n"
+    "backdrop 2\n"
     "reinforcements 20\n"
     "start 1 300 500\n"
     "start 2 500 340\n"
     "platform 300 340 200\r\n"
     "ladder 385 340 500\n"
+    "laser 80 36 500\n"
     "ball 150 150 3 right   # en fin de ligne\n"
     "ball 650 150 2 left\n"
     "future_key 1 2 3\n";
@@ -39,10 +42,12 @@ static void test_parse(void)
     CHECK(level_parse(&l, SAMPLE, strlen(SAMPLE), err, sizeof err));
     CHECK(strcmp(l.name, "Le \"grand\" pont") == 0);
     CHECK(l.hue == 230);
+    CHECK(l.backdrop == 2);
     CHECK(fabsf(l.reinforce - 20) < 0.001f);
     CHECK(l.start[1].x == 500 && l.start[1].y == 340);
     CHECK(l.platform_count == 1 && l.platforms[0].w == 200);
     CHECK(l.ladder_count == 1 && l.ladders[0].bottom == 500);
+    CHECK(l.laser_count == 1 && l.lasers[0].x == 80 && l.lasers[0].top == 36);
     CHECK(l.ball_count == 2);
     CHECK(l.balls[0].size == 2 && l.balls[0].dir == 1);
     CHECK(l.balls[1].size == 1 && l.balls[1].dir == -1);
@@ -67,6 +72,17 @@ static void test_roundtrip(void)
     CHECK(level_parse(&b, buf, n, err, sizeof err) && b.reinforce == REINFORCE_OFF);
 }
 
+static void test_laser_clamp(void)
+{
+    Level l;
+    level_init(&l);
+    l.laser_count = 1;
+    l.lasers[0] = (LevelLaser){ 0, 480, 490 };
+    level_clamp(&l);
+    CHECK(l.lasers[0].x >= WALL_W);
+    CHECK(l.lasers[0].bottom - l.lasers[0].top >= 30);
+}
+
 static void expect_error(const char *text, const char *needle)
 {
     Level l;
@@ -88,6 +104,7 @@ static void test_errors(void)
     expect_error("format 1\nplatform 1 2\n", "platform");
     expect_error("format 1\nname \"pas ferme\n", "guillemet");
     expect_error("format 1\nreinforcements 1\n", "renforts");
+    expect_error("format 1\nbackdrop 9\n", "decor");
 }
 
 static void test_clamp_and_validate(void)
@@ -99,7 +116,7 @@ static void test_clamp_and_validate(void)
     l.balls[l.ball_count++] = (LevelBall){ -50, 9999, 7, 0 };
     level_clamp(&l);
     CHECK(l.balls[0].size == 3 && l.balls[0].dir == 1);
-    CHECK(l.balls[0].x >= 33 && l.balls[0].y <= 500 - 33);
+    CHECK(l.balls[0].x >= 33 + 8 && l.balls[0].y <= 500 - 33);
 }
 
 static void test_slug(void)
@@ -155,6 +172,7 @@ int main(void)
 {
     test_parse();
     test_roundtrip();
+    test_laser_clamp();
     test_errors();
     test_clamp_and_validate();
     test_slug();
