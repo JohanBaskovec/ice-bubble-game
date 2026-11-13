@@ -1,0 +1,29 @@
+# Builds CMake
+/build*/
+/out/
+compile_commands.json
+
+# Android
+platforms/android/.gradle/
+platforms/android/build/
+platforms/android/app/build/
+platforms/android/app/.cxx/
+platforms/android/local.properties
+platforms/android/keystore.properties
+*.jks
+*.keystore
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+
+# IDE (JetBrains : on garde la config partageable)
+.idea/workspace.xml
+.idea/usage.statistics.xml
+.idea/shelf/
+.vscode/
+
+# Divers
+.DS_Store
+*.tmp

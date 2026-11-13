@@ -1,0 +1,14 @@
+# Boules de Givre - fichier de niveau (voir docs/LEVEL_FORMAT.md)
+format 1
+name "Le trio"
+hue 273
+reinforcements default
+
+# joueurs : start <1|2> <x centre> <y pieds>
+start 1 336 500
+start 2 464 500
+
+# ball <x> <y> <taille 1-4> <left|right>
+ball 150 150 4 right
+ball 400 150 4 left
+ball 650 150 4 right

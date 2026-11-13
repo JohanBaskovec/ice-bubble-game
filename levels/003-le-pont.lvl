@@ -1,0 +1,19 @@
+# Boules de Givre - fichier de niveau (voir docs/LEVEL_FORMAT.md)
+format 1
+name "Le pont"
+hue 234
+reinforcements default
+
+# joueurs : start <1|2> <x centre> <y pieds>
+start 1 336 500
+start 2 464 500
+
+# platform <x> <y> <largeur>
+platform 300 340 200
+
+# ladder <x gauche> <haut> <bas>
+ladder 385 340 500
+
+# ball <x> <y> <taille 1-4> <left|right>
+ball 150 150 3 right
+ball 650 150 3 left

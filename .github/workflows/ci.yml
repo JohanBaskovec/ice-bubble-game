@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    name: Bureau Linux + tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configurer
+        run: cmake --preset desktop-debug
+      - name: Compiler
+        run: cmake --build --preset desktop-debug -j
+      - name: Tests
+        run: ctest --preset desktop-debug
+
+  web:
+    name: Web (Emscripten)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: mymindstorm/setup-emsdk@v14
+      - name: Compiler
+        run: |
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web -j
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boules-de-givre-web
+          path: |
+            build-web/index.html
+            build-web/index.js
+            build-web/index.wasm
+            build-web/favicon.png
+
+  android:
+    name: Android (APK debug)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Installer NDK et plateforme
+        run: sdkmanager "ndk;28.2.13676358" "platforms;android-36" "cmake;3.22.1"
+      - name: Compiler
+        working-directory: platforms/android
+        run: ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boules-de-givre-android-debug
+          path: platforms/android/app/build/outputs/apk/debug/*.apk
+
+  ios:
+    name: iOS (simulateur, sans signature)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Generer le projet Xcode
+        run: cmake --preset ios
+      - name: Compiler
+        run: |
+          xcodebuild -project build-ios/BoulesDeGivre.xcodeproj -scheme boules-de-givre \
+            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build

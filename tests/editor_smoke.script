@@ -1,0 +1,64 @@
+# Scenario rejoue par le test "editor_smoke" (voir tests/run_editor_smoke.cmake).
+# Format : <image> <commande> [args]  - coordonnees logiques de l'editeur (1100x640),
+# le terrain commence en (16, 56).
+5 key p
+6 move 216 356
+7 down 216 356
+9 move 400 356
+10 move 516 356
+11 up 516 356
+13 key l
+14 move 366 358
+15 down 366 358
+16 up 366 358
+18 key b
+19 move 1050 287
+20 down 1050 287
+21 up 1050 287
+22 move 900 325
+23 down 900 325
+24 up 900 325
+25 move 166 206
+26 down 166 206
+27 up 166 206
+29 key 1
+30 move 616 506
+31 down 616 506
+32 up 616 506
+34 key v
+35 move 400 362
+36 down 400 362
+37 up 400 362
+38 move 516 363
+39 down 516 363
+40 move 600 363
+41 move 616 363
+42 up 616 363
+46 key s ctrl
+48 move 400 279
+49 down 400 279
+50 up 400 279
+51 key backspace
+52 key backspace
+53 key backspace
+54 key backspace
+55 key backspace
+56 key backspace
+57 key backspace
+58 key backspace
+59 key backspace
+60 key backspace
+61 key backspace
+62 key backspace
+63 key backspace
+64 key backspace
+65 text Le grand pont
+68 key return
+72 key z ctrl
+74 key y ctrl
+76 key t
+140 key escape
+150 move 400 373
+151 down 400 373
+152 up 400 373
+158 quit

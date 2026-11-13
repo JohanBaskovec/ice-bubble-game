@@ -1,0 +1,26 @@
+# Boules de Givre - fichier de niveau (voir docs/LEVEL_FORMAT.md)
+format 1
+name "Escalier de glace"
+hue 256
+reinforcements default
+
+# joueurs : start <1|2> <x centre> <y pieds>
+start 1 336 500
+start 2 464 500
+
+# platform <x> <y> <largeur>
+platform 60 300 110
+platform 250 380 110
+platform 450 300 110
+platform 640 380 110
+
+# ladder <x gauche> <haut> <bas>
+ladder 100 300 500
+ladder 290 380 500
+ladder 490 300 500
+ladder 680 380 500
+
+# ball <x> <y> <taille 1-4> <left|right>
+ball 150 150 4 right
+ball 520 150 3 right
+ball 720 150 3 left

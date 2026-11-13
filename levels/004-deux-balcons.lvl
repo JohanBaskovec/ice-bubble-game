@@ -1,0 +1,20 @@
+# Boules de Givre - fichier de niveau (voir docs/LEVEL_FORMAT.md)
+format 1
+name "Deux balcons"
+hue 251
+reinforcements default
+
+# joueurs : start <1|2> <x centre> <y pieds>
+start 1 336 500
+start 2 464 500
+
+# platform <x> <y> <largeur>
+platform 80 330 180
+platform 540 330 180
+
+# ladder <x gauche> <haut> <bas>
+ladder 155 330 500
+ladder 615 330 500
+
+# ball <x> <y> <taille 1-4> <left|right>
+ball 400 150 4 right

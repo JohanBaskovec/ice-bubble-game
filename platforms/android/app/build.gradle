@@ -1,0 +1,69 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Version : garder en phase avec project(VERSION ...) dans CMakeLists.txt
+def appVersionName = "0.1.0"
+def appVersionCode = 1      // a incrementer a chaque envoi sur le Play Store
+
+android {
+    namespace = "com.johanbaskovec.boulesdegivre"
+    // Google Play exige un targetSdk recent : verifier la regle en vigueur avant chaque envoi
+    compileSdk = 36
+    ndkVersion = "28.2.13676358"
+
+    defaultConfig {
+        applicationId "com.johanbaskovec.boulesdegivre"
+        minSdk 21
+        targetSdk 36
+        versionCode appVersionCode
+        versionName appVersionName
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_PLATFORM=android-21",
+                          "-DANDROID_STL=c++_static",
+                          "-DBDG_BUILD_TESTS=OFF"
+                abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+            }
+        }
+    }
+
+    // Signature de release : renseigner keystore.properties (non versionne), voir docs/RELEASE.md
+    def ksFile = rootProject.file("keystore.properties")
+    if (ksFile.exists()) {
+        def ks = new Properties()
+        ks.load(new FileInputStream(ksFile))
+        signingConfigs {
+            release {
+                storeFile file(ks['storeFile'])
+                storePassword ks['storePassword']
+                keyAlias ks['keyAlias']
+                keyPassword ks['keyPassword']
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.release
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt')
+        }
+    }
+
+    sourceSets.main {
+        // classes Java de SDL (SDLActivity...) prises directement dans le sous-module
+        java.srcDirs += ['../../../third_party/SDL/android-project/app/src/main/java']
+    }
+
+    externalNativeBuild {
+        cmake {
+            path '../../../CMakeLists.txt'
+            version '3.22.1+'
+        }
+    }
+
+    lint {
+        abortOnError = false
+    }
+}

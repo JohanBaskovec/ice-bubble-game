@@ -1,0 +1,12 @@
+# Boules de Givre - fichier de niveau (voir docs/LEVEL_FORMAT.md)
+format 1
+name "Premier flocon"
+hue 200
+reinforcements default
+
+# joueurs : start <1|2> <x centre> <y pieds>
+start 1 336 500
+start 2 464 500
+
+# ball <x> <y> <taille 1-4> <left|right>
+ball 200 150 3 right

@@ -1,0 +1,44 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "desktop-debug",
+      "displayName": "Bureau (Debug)",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "desktop-release",
+      "displayName": "Bureau (Release)",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "BDG_BUILD_TESTS": "OFF" }
+    },
+    {
+      "name": "web",
+      "displayName": "Web (Emscripten, Release)",
+      "binaryDir": "${sourceDir}/build-web",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "ios",
+      "displayName": "iOS (projet Xcode)",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build-ios",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
+        "CMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH": "NO"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "desktop-debug", "configurePreset": "desktop-debug" },
+    { "name": "desktop-release", "configurePreset": "desktop-release" },
+    { "name": "web", "configurePreset": "web" }
+  ],
+  "testPresets": [
+    { "name": "desktop-debug", "configurePreset": "desktop-debug", "output": { "outputOnFailure": true } }
+  ]
+}
