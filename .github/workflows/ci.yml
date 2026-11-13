@@ -16,9 +16,12 @@ jobs:
       - name: Dependances SDL (X11, Wayland, audio)
         run: |
           sudo apt-get update
+          # liste issue de docs/README-linux.md de SDL3
           sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-            libxss-dev libxfixes-dev libwayland-dev libxkbcommon-dev wayland-protocols libegl-dev \
-            libgl-dev libpulse-dev libasound2-dev libudev-dev imagemagick
+            libxss-dev libxfixes-dev libxtst-dev libwayland-dev libxkbcommon-dev wayland-protocols \
+            libdecor-0-dev libegl-dev libgl-dev libgles-dev libdrm-dev libgbm-dev libpulse-dev \
+            libasound2-dev libpipewire-0.3-dev libjack-dev libsndio-dev libdbus-1-dev libibus-1.0-dev \
+            libudev-dev liburing-dev imagemagick
       - name: Configurer
         run: cmake --preset desktop-debug
       - name: Compiler
